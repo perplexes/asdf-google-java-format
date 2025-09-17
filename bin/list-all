@@ -1,11 +1,31 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+set -eu
 
-set -euo pipefail
+# Optional auth to dodge rate limits (see guide's API Rate Limiting)
+# export GITHUB_API_TOKEN=...
+auth_hdr=""
+[ -n "${GITHUB_API_TOKEN:-}" ] && auth_hdr="-H Authorization: token $GITHUB_API_TOKEN"
 
-current_script_path=${BASH_SOURCE[0]}
-plugin_dir=$(dirname "$(dirname "$current_script_path")")
+# Fetch tags named v*; API returns newest-first.
+# We output oldest-first (newest last), space-separated.
+page=1
+names=""
+while :; do
+  url="https://api.github.com/repos/google/google-java-format/tags?per_page=100&page=$page"
+  res="$(curl -fsSL $auth_hdr "$url" || true)"
+  [ -z "$res" ] && break
+  # Extract "name":"v1.28.0"
+  page_names="$(printf '%s' "$res" | sed -n 's/.*"name"[[:space:]]*:[[:space:]]*"v\([^"]*\)".*/\1/p')"
+  [ -z "$page_names" ] && break
+  # Append preserving API order (newest→oldest per page)
+  names="$names
+$page_names"
+  # Stop if fewer than 100 returned
+  [ "$(printf '%s' "$page_names" | wc -l | tr -d ' ')" -lt 100 ] && break
+  page=$((page+1))
+done
 
-# shellcheck source=./lib/utils.bash
-source "${plugin_dir}/lib/utils.bash"
-
-list_all_versions | sort_versions | xargs echo
+# Reverse order to oldest→newest without tac/sort -V (portable awk stack)
+# Collect lines into array a[NR], then print in reverse.
+rev="$(printf '%s' "$names" | awk 'NF{a[NR]=$0} END{for(i=NR;i>=1;i--)printf (i==1? "%s" : "%s ", a[i])}')"
+printf '%s\n' "$rev"

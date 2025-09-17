@@ -1,11 +1,63 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+set -eu
 
-set -euo pipefail
+: "${ASDF_INSTALL_TYPE:?}"
+: "${ASDF_INSTALL_VERSION:?}"
+: "${ASDF_INSTALL_PATH:?}"
 
-current_script_path=${BASH_SOURCE[0]}
-plugin_dir=$(dirname "$(dirname "$current_script_path")")
+# If bin/download was used, ASDF_DOWNLOAD_PATH will be set and populated.
+: "${ASDF_DOWNLOAD_PATH:=}"
 
-# shellcheck source=./lib/utils.bash
-source "${plugin_dir}/lib/utils.bash"
+case "$ASDF_INSTALL_TYPE" in
+  version) ver="${ASDF_INSTALL_VERSION#v}";;
+  ref)     ref="$ASDF_INSTALL_VERSION"; case "$ref" in v*) ver="${ref#v}";; *) ver="$ref";; esac;;
+  *) echo "Unknown ASDF_INSTALL_TYPE: $ASDF_INSTALL_TYPE" >&2; exit 1;;
+esac
 
-install_version "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
+jar_src=""
+diff_src=""
+
+if [ -n "$ASDF_DOWNLOAD_PATH" ] && [ -d "$ASDF_DOWNLOAD_PATH" ]; then
+  jar_src="$ASDF_DOWNLOAD_PATH/google-java-format-${ver}-all-deps.jar"
+  diff_src="$ASDF_DOWNLOAD_PATH/google-java-format-diff.py"
+  [ -f "$jar_src" ] || { echo "jar not found in download path" >&2; exit 1; }
+  [ -f "$diff_src" ] || { echo "diff.py not found in download path" >&2; exit 1; }
+else
+  # Legacy path: download here (for old asdf cores)
+  tmpdl="$(mktemp -d)"
+  ASDF_DOWNLOAD_PATH="$tmpdl" "$(dirname "$0")/download"
+  jar_src="$tmpdl/google-java-format-${ver}-all-deps.jar"
+  diff_src="$tmpdl/google-java-format-diff.py"
+fi
+
+# stage into a temp dir to avoid TOCTOU
+staged="$(mktemp -d)"
+mkdir -p "$staged/bin" "$staged/libexec"
+
+cp "$jar_src" "$staged/libexec/google-java-format.jar"
+cp "$diff_src" "$staged/bin/google-java-format-diff"
+chmod +x "$staged/bin/google-java-format-diff"
+
+# launcher shim (portable)
+cat > "$staged/bin/google-java-format" <<'EOF'
+#!/usr/bin/env sh
+set -eu
+# Resolve jar relative to this script
+prefix="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+exec java -jar "$prefix/libexec/google-java-format.jar" "$@"
+EOF
+chmod +x "$staged/bin/google-java-format"
+
+# atomic-ish move into place
+mkdir -p "$ASDF_INSTALL_PATH"
+# remove any previous content if present (fresh install path expected)
+rm -rf "$ASDF_INSTALL_PATH"/*
+cp -R "$staged/." "$ASDF_INSTALL_PATH/"
+
+# smoke test
+"$ASDF_INSTALL_PATH/bin/google-java-format" --version >/dev/null 2>&1 || {
+  echo "smoke test failed" >&2
+  exit 1
+}
+
+echo "Installed google-java-format $ver to $ASDF_INSTALL_PATH"

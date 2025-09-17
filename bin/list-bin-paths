@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+# space-separated, relative to ASDF_INSTALL_PATH
+printf '%s\n' "bin"

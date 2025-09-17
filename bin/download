@@ -1,23 +1,42 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+set -eu
 
-set -euo pipefail
+: "${ASDF_INSTALL_TYPE:?}"
+: "${ASDF_INSTALL_VERSION:?}"
+: "${ASDF_DOWNLOAD_PATH:?}"
 
-current_script_path=${BASH_SOURCE[0]}
-plugin_dir=$(dirname "$(dirname "$current_script_path")")
+owner_repo="google/google-java-format"
 
-# shellcheck source=./lib/utils.bash
-source "${plugin_dir}/lib/utils.bash"
+# Resolve tag and version
+case "$ASDF_INSTALL_TYPE" in
+  version)
+    ver="${ASDF_INSTALL_VERSION#v}"
+    tag="v$ver"
+    ;;
+  ref)
+    # allow raw refs or tags; normalize to start with v if missing
+    ref="$ASDF_INSTALL_VERSION"
+    case "$ref" in v*) tag="$ref" ;; *) tag="v$ref" ;; esac
+    ver="${tag#v}"
+    ;;
+  *)
+    echo "Unknown ASDF_INSTALL_TYPE: $ASDF_INSTALL_TYPE" >&2; exit 1
+    ;;
+esac
 
 mkdir -p "$ASDF_DOWNLOAD_PATH"
 
-# TODO: Adapt this to proper extension and adapt extracting strategy.
-release_file="$ASDF_DOWNLOAD_PATH/$TOOL_NAME-$ASDF_INSTALL_VERSION.tar.gz"
+jar="google-java-format-${ver}-all-deps.jar"
+jar_url="https://github.com/${owner_repo}/releases/download/${tag}/${jar}"
+diff_name="google-java-format-diff.py"
+diff_url="https://raw.githubusercontent.com/${owner_repo}/${tag}/scripts/${diff_name}"
 
-# Download tar.gz file to the download directory
-download_release "$ASDF_INSTALL_VERSION" "$release_file"
+echo "Downloading $jar..."
+curl -fsSL "$jar_url" -o "${ASDF_DOWNLOAD_PATH}/${jar}"
 
-#  Extract contents of tar.gz file into the download directory
-tar -xzf "$release_file" -C "$ASDF_DOWNLOAD_PATH" --strip-components=1 || fail "Could not extract $release_file"
+echo "Downloading ${diff_name}..."
+curl -fsSL "$diff_url" -o "${ASDF_DOWNLOAD_PATH}/${diff_name}"
+chmod +x "${ASDF_DOWNLOAD_PATH}/${diff_name}"
 
-# Remove the tar.gz file since we don't need to keep it
-rm "$release_file"
+
+echo "Downloaded to $ASDF_DOWNLOAD_PATH"
