@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu
+# one per line as the guide suggests
+cat <<'EOF'
+curl
+openssl
+awk
+sed
+sh
+java
+python3
+EOF

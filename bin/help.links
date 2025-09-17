@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+set -eu
+cat <<'EOF'
+GitHub: https://github.com/google/google-java-format
+Releases: https://github.com/google/google-java-format/releases
+Docs: https://github.com/google/google-java-format#readme
+EOF

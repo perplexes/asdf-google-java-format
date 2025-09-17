@@ -1,29 +1,18 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
+set -eu
 
-set -euo pipefail
+filter="${1:-}"
 
-current_script_path=${BASH_SOURCE[0]}
-plugin_dir=$(dirname "$(dirname "$current_script_path")")
+all="$( "$(dirname "$0")/list-all" )"
 
-# shellcheck source=./lib/utils.bash
-. "${plugin_dir}/lib/utils.bash"
+# Convert to newline list for easy filtering
+nl="$(printf '%s' "$all" | tr ' ' '\n' | awk 'NF')"
 
-curl_opts=(-sI)
-
-if [ -n "${GITHUB_API_TOKEN:-}" ]; then
-	curl_opts=("${curl_opts[@]}" -H "Authorization: token $GITHUB_API_TOKEN")
+if [ -n "$filter" ]; then
+  nl="$(printf '%s\n' "$nl" | awk -v f="$filter" 'index($0,f)==1')"
 fi
 
-# curl of REPO/releases/latest is expected to be a 302 to another URL
-# when no releases redirect_url="REPO/releases"
-# when there are releases redirect_url="REPO/releases/tag/v<VERSION>"
-redirect_url=$(curl "${curl_opts[@]}" "$GH_REPO/releases/latest" | sed -n -e "s|^location: *||p" | sed -n -e "s|\r||p")
-version=
-printf "redirect url: %s\n" "$redirect_url" >&2
-if [[ "$redirect_url" == "$GH_REPO/releases" ]]; then
-	version="$(list_all_versions | sort_versions | tail -n1 | xargs echo)"
-else
-	version="$(printf "%s\n" "$redirect_url" | sed 's|.*/tag/v\{0,1\}||')"
-fi
+# Take the last line (newest) portably
+latest="$(printf '%s\n' "$nl" | awk 'NF{last=$0} END{if(last)print last}')"
 
-printf "%s\n" "$version"
+[ -n "$latest" ] && printf '%s\n' "$latest"

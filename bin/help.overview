@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+set -eu
+cat <<'EOF'
+Google Java Format: reformat Java source to Google Java Style.
+This plugin installs the shaded JAR and the google-java-format-diff helper script.
+EOF
