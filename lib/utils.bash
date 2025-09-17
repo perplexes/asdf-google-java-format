@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # TODO: Ensure this is the correct GitHub homepage where releases can be downloaded for google-java-format.
-GH_REPO="https://github.com/datavant/asdf-google-java-format"
+GH_REPO="https://github.com/perplexes/asdf-google-java-format"
 TOOL_NAME="google-java-format"
 TOOL_TEST="google-java-format --help"
 
